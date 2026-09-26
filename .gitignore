@@ -1,0 +1,6 @@
+
+# Terraform: downloaded providers and local state
+**/.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info

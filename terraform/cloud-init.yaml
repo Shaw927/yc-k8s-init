@@ -1,0 +1,43 @@
+#cloud-config
+package_update: true
+packages:
+  - snapd
+  - curl
+  - bash-completion
+
+runcmd:
+  # 1. Дождаться полной готовности snapd, чтобы install не падал в самом начале
+  - [ 'sh', '-c', 'until systemctl is-active --quiet snapd.socket; do sleep 2; done' ]
+  - snap wait system seed.loaded
+
+  # 2. Установка MicroK8s
+  - snap install microk8s --classic --channel=1.29/stable
+  - usermod -a -G microk8s ubuntu
+
+  # 3. Ждём готовности кластера (полный путь - не зависим от PATH)
+  - /snap/bin/microk8s status --wait-ready
+  - /snap/bin/microk8s enable dns storage
+
+  # 4. kubectl доступен как обычная команда сразу, без login-сессии и snap alias
+  - ln -sf /snap/bin/microk8s.kubectl /usr/local/bin/kubectl
+  - ln -sf /snap/bin/microk8s.helm3 /usr/local/bin/helm
+
+  # 5. kubeconfig в стандартном месте, чтобы работал "настоящий" ~/.kube/config
+  - mkdir -p /home/ubuntu/.kube
+  - /snap/bin/microk8s config > /home/ubuntu/.kube/config
+  - chown -R ubuntu:ubuntu /home/ubuntu/.kube
+  - chmod 600 /home/ubuntu/.kube/config
+
+  # 6. Алиасы и автодополнение — короткие команды и Tab как в реальном k8s
+  - |
+    cat >> /home/ubuntu/.bashrc <<'EOF'
+
+    # --- k8s shortcuts ---
+    alias k=kubectl
+    export KUBECONFIG=/home/ubuntu/.kube/config
+    source <(kubectl completion bash)
+    complete -o default -F __start_kubectl k
+    EOF
+  - chown ubuntu:ubuntu /home/ubuntu/.bashrc
+
+final_message: "MicroK8s + kubectl готовы, up $UPTIME секунд"
